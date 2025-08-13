@@ -48,6 +48,7 @@ add_executable(torque_collector src/torque_collector.cpp)
 add_executable(physics_motion src/physics_motion.cpp)
 add_executable(physics_sensor src/physics_sensor.cpp)
 add_executable(orbit_dynamics src/orbit_dynamics.cpp)
+add_executable(orbit_dynamics_mock tests/orbit_dynamics/orbit_dynamics_mock.cpp)
 add_executable(sense_estimate src/sense_estimate.cpp)
 add_executable(control_torque src/control_torque.cpp)
 add_library(thruster_matrix STATIC src/thruster_matrix.cpp)
@@ -58,6 +59,7 @@ ament_target_dependencies(demo1c_small_incident rclcpp std_msgs tf2_geometry_msg
 ament_target_dependencies(torque_collector rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs)
 ament_target_dependencies(physics_motion rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs visualization_msgs)
 ament_target_dependencies(orbit_dynamics rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs visualization_msgs)
+ament_target_dependencies(orbit_dynamics_mock rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs visualization_msgs)
 ament_target_dependencies(physics_sensor rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs visualization_msgs)
 ament_target_dependencies(sense_estimate rclcpp std_msgs tf2 tf2_ros nav_msgs tf2_geometry_msgs visualization_msgs)
 ament_target_dependencies(control_torque rclcpp std_msgs tf2 tf2_ros nav_msgs tf2_geometry_msgs visualization_msgs)
@@ -79,6 +81,9 @@ target_link_libraries(physics_motion
 target_link_libraries(orbit_dynamics
   ${cpp_typesupport_target}
   thruster_matrix)
+target_link_libraries(orbit_dynamics_mock
+  ${cpp_typesupport_target}
+  thruster_matrix)
 
 target_link_libraries(thruster_matrix
   Eigen3::Eigen
@@ -93,6 +98,7 @@ ament_export_include_directories(
 target_link_libraries(control_torque ${cpp_typesupport_target})
 target_link_libraries(physics_motion ${cpp_typesupport_target})
 target_link_libraries(orbit_dynamics ${cpp_typesupport_target})
+target_link_libraries(orbit_dynamics_mock ${cpp_typesupport_target})
 
 
 
@@ -109,6 +115,8 @@ install(TARGETS
   demo1c_small_incident
   torque_collector
   physics_motion
+  orbit_dynamics
+  orbit_dynamics_mock
   physics_sensor
   sense_estimate
   control_torque
