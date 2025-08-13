@@ -1,0 +1,8 @@
+orbit_physics_motion:
+  ros__parameters:
+    timing.torque_dt: 60.0
+    timing.pub_dt: 1.0
+    initial.tle_line2: "2 25544  51.6452 334.5328 0004408 351.0413  99.6998 15.49890618333972"
+    initial.urdf_filepath: "./space_station_gnc/urdf/ISS_stationaryFromNasa.urdf"
+    dynamics.total_mass: 10000.0
+    dynamics.mu: 398600441800000.0
