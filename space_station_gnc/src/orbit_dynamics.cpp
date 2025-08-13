@@ -286,17 +286,38 @@ public:
 
         OrbitLib::convert_tle_to_eci(tle_line2, this->pos_eci_cur, this->vel_eci_cur);
 
-        this->acc_eci_cur = this->calc_acc(this->pos_eci_cur, Eigen::Vector3d::Zero());
-
         this->pub_pos_eci = this->create_publisher<geometry_msgs::msg::Vector3>("gnc/pos_eci", 10);
         // this->pub_vel_eci = this->create_publisher<geometry_msgs::msg::Vector3>("gnc/vel_eci", 10);
         // this->pub_acc_eci = this->create_publisher<geometry_msgs::msg::Vector3>("gnc/acc_eci", 10);
+        
+        RCLCPP_INFO(this->get_logger(), "Initial position at ECI=[%f, %f, %f]", this->pos_eci_cur[0], this->pos_eci_cur[1], this->pos_eci_cur[2]);
+        RCLCPP_INFO(this->get_logger(), "Initial velocity at ECI=[%f, %f, %f]", this->vel_eci_cur[0], this->vel_eci_cur[1], this->vel_eci_cur[2]);
         
         // ---- Dynamics Parameter ----
         
         //TODO: handled by parameter surver?
         this->total_mass = this->get_parameter("dynamics.total_mass").as_double();
-        mu = this->get_parameter("dynamics.mu").as_double();
+        this->mu = this->get_parameter("dynamics.mu").as_double();
+
+        this->acc_eci_cur = this->calc_acc(this->pos_eci_cur, Eigen::Vector3d::Zero());
+
+        RCLCPP_INFO(this->get_logger(), "-------- Initial parameters --------");
+        RCLCPP_INFO(this->get_logger(), "total_mass: %f [kg]", this->total_mass);
+        RCLCPP_INFO(this->get_logger(), "mu: %f [m^3/s^2]", this->mu);
+        RCLCPP_INFO(this->get_logger(), "Position at ECI: [%f, %f, %f] [m]", this->pos_eci_cur[0], this->pos_eci_cur[1], this->pos_eci_cur[2]);
+        RCLCPP_INFO(this->get_logger(), "Velocity at ECI: [%f, %f, %f] [m]", this->vel_eci_cur[0], this->vel_eci_cur[1], this->vel_eci_cur[2]);
+        RCLCPP_INFO(this->get_logger(), "Acceleration at ECI: [%f, %f, %f] [m]", this->acc_eci_cur[0], this->acc_eci_cur[1], this->acc_eci_cur[2]);
+        RCLCPP_INFO(this->get_logger(), "------------------------------------");
+
+        // space station parameter
+        std::string urdf_fpath;
+        this->get_parameter("initial.urdf_filepath", urdf_fpath);
+        // ToDo
+        // this->thrusterMat.initialize(urdf_fpath);
+        // this->n_thruster = this->thrusterMat.getNumThr();
+
+        // Temp
+        this->n_thruster = 12;
 
         // ---- Subscription ----
 
@@ -333,7 +354,7 @@ private:
 
     // -------- Variables --------
     // The number of the thrusters
-    const size_t n_thruster = 12;
+    size_t n_thruster ;
     
     // ---- Subscription ----
     // 
@@ -387,9 +408,10 @@ private:
 
         geometry_msgs::msg::Vector3 pos_eci_msg;
         pos_eci_msg.x = this->pos_eci_cur[0];
-        pos_eci_msg.y = this->vel_eci_cur[1];
-        pos_eci_msg.z = this->acc_eci_cur[2];
+        pos_eci_msg.y = this->pos_eci_cur[1];
+        pos_eci_msg.z = this->pos_eci_cur[2];
         this->pub_pos_eci->publish(pos_eci_msg);
+        RCLCPP_INFO(this->get_logger(), "Publish position at ECI=[%f,%f,%f]", this->pos_eci_cur[0], this->pos_eci_cur[1], this->pos_eci_cur[2]);
     }
 
     // ToDo
@@ -401,9 +423,7 @@ private:
         double t_sim2forward = msg->data;
         RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        RCLCPP_INFO(this->get_logger(),"forwarding for %f mins!!!!",t_sim2forward/60.0);
-        RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        RCLCPP_INFO(this->get_logger(),"forwarding for %f mins!!!!", t_sim2forward/60.0);
         RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         RCLCPP_INFO(this->get_logger(),"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         
@@ -416,7 +436,7 @@ private:
                 std::this_thread::sleep_for(std::chrono::duration<double>(0.1)); 
             }
         }    
-        RCLCPP_INFO(this->get_logger(),"forwarded");
+        RCLCPP_INFO(this->get_logger(), "forwarded");
     }
 
     /**
@@ -455,30 +475,48 @@ private:
      * @return acceleration to space station at ECI
      * @detail integrate elements by Euler method.
      */
-    void forward_orbit_dynamics(double Tfwd_sec){
+    void forward_orbit_dynamics(double dt){
 
-        // restore current values
-        Eigen::Vector3d pos_eci_old = this->pos_eci_cur;
-        Eigen::Vector3d vel_eci_old = this->vel_eci_cur;
-        Eigen::Vector3d acc_eci_old = this->acc_eci_cur;
+        Eigen::Vector3d pos0 = this->pos_eci_cur;
+        Eigen::Vector3d vel0 = this->vel_eci_cur;
 
-        // ---- Thruster force ----
-        // Thruster force at body frame
-        Eigen::Vector3d thruster_force_bf;
-        this->thrusterMat.thrusterToBody(this->bias_thruster_input, thruster_force_bf);
-
-        // DCM of attitude
+        // Thruster force at BF (tempolary zero)
+        Eigen::Vector3d thruster_force_bf = Eigen::Vector3d::Zero();
         auto att_dcm = quat2dcm(this->attitude_quat);
-
-        // Transform BF->ECI
         Eigen::Vector3d thruster_force_eci = att_dcm * thruster_force_bf;
 
-        // update position & velocity by Euler method
-        this->pos_eci_cur = pos_eci_old + vel_eci_old*Tfwd_sec;
-        this->vel_eci_cur = vel_eci_old + acc_eci_old*Tfwd_sec;
+        // ToDo
+        // std::cout <<  this->thrusterMat.getNumThr() << std::endl;
+        // this->thrusterMat.thrusterToBody(this->bias_thruster_input, thruster_force_bf);
 
-        // update acceleration
-        this->acc_eci_cur = this->calc_acc(pos_eci_old, thruster_force_eci);
+        // k1
+        Eigen::Vector3d k1_pos = vel0;
+        Eigen::Vector3d k1_vel = calc_acc(pos0, thruster_force_eci);
+
+        // k2
+        Eigen::Vector3d pos_k2 = pos0 + 0.5 * dt * k1_pos;
+        Eigen::Vector3d vel_k2 = vel0 + 0.5 * dt * k1_vel;
+        Eigen::Vector3d k2_pos = vel_k2;
+        Eigen::Vector3d k2_vel = calc_acc(pos_k2, thruster_force_eci);
+
+        // k3
+        Eigen::Vector3d pos_k3 = pos0 + 0.5 * dt * k2_pos;
+        Eigen::Vector3d vel_k3 = vel0 + 0.5 * dt * k2_vel;
+        Eigen::Vector3d k3_pos = vel_k3;
+        Eigen::Vector3d k3_vel = calc_acc(pos_k3, thruster_force_eci);
+
+        // k4
+        Eigen::Vector3d pos_k4 = pos0 + dt * k3_pos;
+        Eigen::Vector3d vel_k4 = vel0 + dt * k3_vel;
+        Eigen::Vector3d k4_pos = vel_k4;
+        Eigen::Vector3d k4_vel = calc_acc(pos_k4, thruster_force_eci);
+
+        // sum
+        this->pos_eci_cur = pos0 + (dt / 6.0) * (k1_pos + 2.0 * k2_pos + 2.0 * k3_pos + k4_pos);
+        this->vel_eci_cur = vel0 + (dt / 6.0) * (k1_vel + 2.0 * k2_vel + 2.0 * k3_vel + k4_vel);
+
+        // new acceleration
+        this->acc_eci_cur = calc_acc(this->pos_eci_cur, thruster_force_eci);
     }
 
     
@@ -490,7 +528,7 @@ private:
         this->attitude_quat[3] = msg->w;
     }
 
-    
+
     void callback_bias_thruster_inp(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
     {
         size_t idx = 0;
